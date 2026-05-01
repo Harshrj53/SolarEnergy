@@ -1,5 +1,5 @@
 import openpyxl
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.styles import Font, Alignment, Border, Side
 import datetime
 import os
 import logging
@@ -21,39 +21,60 @@ THIN_BORDER = Border(
     bottom=Side(style='thin', color='CCCCCC')
 )
 
-def auto_adjust_columns(ws):
+def setup_page_layout(ws):
     """
-    Dynamically adjusts column widths based on content length.
-    Capped at 40 characters for readability.
+    Sets explicit column widths and header row height for cross-platform stability.
+    Standardized for Excel, Google Sheets, and Numbers.
     """
-    for col in ws.columns:
-        max_length = 0
-        column = col[0].column_letter # Get the column name
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        adjusted_width = min(max_length + 4, 40)
-        ws.column_dimensions[column].width = adjusted_width
+    # Column Widths (A=18, B=18, C=22, D=22)
+    ws.column_dimensions['A'].width = 18
+    ws.column_dimensions['B'].width = 18
+    ws.column_dimensions['C'].width = 22
+    ws.column_dimensions['D'].width = 22
 
-def apply_cell_styling(cell, is_header=False, is_label=False):
-    """
-    Applies consistent alignment, borders, and fonts to a cell.
-    """
-    # Alignment logic
-    align = "left"
-    if is_header:
-        align = "center"
+    # Header Height
+    ws.row_dimensions[1].height = 35
+
+    # Merge Header A1:D1
+    ws.unmerge_cells('A1:D1') # Reset if exists
+    ws.merge_cells('A1:D1')
     
-    cell.alignment = Alignment(horizontal=align, vertical="center", wrap_text=True)
-    cell.border = THIN_BORDER
+    header = ws['A1']
+    header.alignment = Alignment(horizontal="center", vertical="center")
+    header.font = Font(bold=True, size=14)
+
+def write_data_row(ws, row_idx, label, value, number_format=None, is_bold_value=False):
+    """
+    Writes a 4-column balanced row:
+    - Merges A:B for Label
+    - Merges C:D for Value
+    - Applies wrap_text and vertical centering
+    """
+    # 1. Prepare Label (A:B)
+    ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=2)
+    cell_label = ws.cell(row=row_idx, column=1)
+    cell_label.value = label
+    cell_label.font = Font(bold=True)
+    cell_label.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     
-    if is_header:
-        cell.font = Font(bold=True, size=12)
-    elif is_label:
-        cell.font = Font(bold=True)
+    # 2. Prepare Value (C:D)
+    ws.merge_cells(start_row=row_idx, start_column=3, end_row=row_idx, end_column=4)
+    cell_value = ws.cell(row=row_idx, column=3)
+    cell_value.value = value
+    if number_format:
+        cell_value.number_format = number_format
+    
+    cell_value.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    if is_bold_value:
+        cell_value.font = Font(bold=True)
+
+    # 3. Apply Row Height & Borders
+    ws.row_dimensions[row_idx].height = 25
+    
+    # Apply borders to all 4 cells in the row
+    for col in range(1, 5):
+        cell = ws.cell(row=row_idx, column=col)
+        cell.border = THIN_BORDER
 
 def clean_numeric(value):
     """Utility to ensure we are writing floats to Excel."""
@@ -67,7 +88,8 @@ def clean_numeric(value):
 
 def write_to_template(payload, output_path):
     """
-    Professional Excel Automation Engine with Advanced Formatting.
+    Advanced Refactored Excel Generation Engine.
+    Uses a balanced 4-column grid (A:B Label | C:D Value).
     """
     data = payload.get("data", payload)
     
@@ -76,57 +98,39 @@ def write_to_template(payload, output_path):
 
     try:
         wb = openpyxl.load_workbook(TEMPLATE_PATH)
+        ws = wb.active
         
-        # Apply to all sheets (Requirements check)
-        for ws in wb.worksheets:
-            logger.info(f"Styling sheet: {ws.title}")
-            
-            # 1. Row Height for Header
-            ws.row_dimensions[1].height = 30
-            
-            # 2. Data Mapping (Assumes Bill Data is on the active/main sheet)
-            if ws == wb.active:
-                # Write and Style Labels (A3:A8)
-                labels_map = {
-                    "A3": "Consumer Name:",
-                    "A4": "Consumer Number:",
-                    "A5": "Units Consumed (kWh):",
-                    "A6": "Total Bill Amount (₹):",
-                    "A7": "Tariff / Rate (₹/kWh):",
-                    "A8": "Extraction Date:"
-                }
-                for cell_ref, val in labels_map.items():
-                    ws[cell_ref] = val
-                    apply_cell_styling(ws[cell_ref], is_label=True)
+        # 1. Initialize Structure
+        setup_page_layout(ws)
+        
+        # 2. Populate Data using the 4-Column Balanced Grid
+        # Row 3: Consumer Name
+        write_data_row(ws, 3, "Consumer Name", str(data.get("consumer_name") or "Valued Customer"))
+        
+        # Row 4: Consumer Number
+        write_data_row(ws, 4, "Consumer Number", str(data.get("consumer_number") or "N/A"))
+        
+        # Row 5: Units (Shortened label as requested)
+        units = int(clean_numeric(data.get("units")))
+        write_data_row(ws, 5, "Units (kWh)", units, number_format='#,##0')
+        
+        # Row 6: Total Bill Amount
+        amount = clean_numeric(data.get("amount"))
+        write_data_row(ws, 6, "Total Bill Amount", amount, number_format='₹#,##0.00')
+        
+        # Row 7: Rate (Shortened label as requested)
+        tariff = clean_numeric(data.get("tariff"))
+        write_data_row(ws, 7, "Rate (₹/kWh)", tariff, number_format='0.00')
+        
+        # Row 8: Extraction Date
+        date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        write_data_row(ws, 8, "Extraction Date", date_str)
 
-                # Write and Style Values (B3:B8)
-                ws['B3'] = str(data.get("consumer_name") or "Valued Customer")
-                ws['B4'] = str(data.get("consumer_number") or "N/A")
-                
-                # Numeric fields with specific formatting
-                ws['B5'] = int(clean_numeric(data.get("units")))
-                ws['B5'].number_format = '#,##0' # Integer
-                
-                ws['B6'] = clean_numeric(data.get("amount"))
-                ws['B6'].number_format = '₹#,##0.00' # Currency
-                
-                ws['B7'] = clean_numeric(data.get("tariff"))
-                ws['B7'].number_format = '0.00' # Float
-                
-                ws['B8'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-                # Apply styling to value cells
-                for row in ws.iter_rows(min_row=3, max_row=8, min_col=2, max_col=2):
-                    for cell in row:
-                        apply_cell_styling(cell)
-
-            # 3. Final Polish: Auto-adjust and Spacing
-            auto_adjust_columns(ws)
-
+        # 3. Save
         wb.save(output_path)
-        logger.info(f"Professional Excel report saved: {output_path}")
+        logger.info(f"Professional 4-column report generated: {output_path}")
         return output_path
 
     except Exception as e:
-        logger.error(f"Excel styling/writing error: {str(e)}")
+        logger.error(f"Excel Refactor Error: {str(e)}")
         raise
