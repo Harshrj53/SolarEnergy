@@ -1,4 +1,5 @@
 import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 import datetime
 import os
 import logging
@@ -12,102 +13,120 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_PATH = os.path.join(BASE_DIR, "templates", "solar_template.xlsx")
 
-# Config Defaults
-DEFAULTS = {
-    "sanctioned_load": 1.0,
-    "tariff": 8.0,
-    "consumer_name": "Valued Customer",
-    "consumer_number": "N/A"
-}
+# Styling Tokens
+THIN_BORDER = Border(
+    left=Side(style='thin', color='CCCCCC'),
+    right=Side(style='thin', color='CCCCCC'),
+    top=Side(style='thin', color='CCCCCC'),
+    bottom=Side(style='thin', color='CCCCCC')
+)
+
+def auto_adjust_columns(ws):
+    """
+    Dynamically adjusts column widths based on content length.
+    Capped at 40 characters for readability.
+    """
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter # Get the column name
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min(max_length + 4, 40)
+        ws.column_dimensions[column].width = adjusted_width
+
+def apply_cell_styling(cell, is_header=False, is_label=False):
+    """
+    Applies consistent alignment, borders, and fonts to a cell.
+    """
+    # Alignment logic
+    align = "left"
+    if is_header:
+        align = "center"
+    
+    cell.alignment = Alignment(horizontal=align, vertical="center", wrap_text=True)
+    cell.border = THIN_BORDER
+    
+    if is_header:
+        cell.font = Font(bold=True, size=12)
+    elif is_label:
+        cell.font = Font(bold=True)
 
 def clean_numeric(value):
-    """
-    Cleans string values like '₹ 3,375.00' or '450 kWh' into clean floats.
-    """
-    if value is None or value == "":
-        return 0.0
-    if isinstance(value, (int, float)):
-        return float(value)
-    
-    # Remove currency symbols, commas, and units
+    """Utility to ensure we are writing floats to Excel."""
+    if value is None or value == "": return 0.0
+    if isinstance(value, (int, float)): return float(value)
     cleaned = re.sub(r"[^\d.]", "", str(value).replace(',', ''))
     try:
         return float(cleaned)
-    except ValueError:
-        logger.warning(f"Could not convert value '{value}' to numeric. Using 0.0")
+    except:
         return 0.0
 
 def write_to_template(payload, output_path):
     """
-    Enhanced Excel automation engine.
-    Accepts payload: {"data": {...}, "confidence": {...}}
+    Professional Excel Automation Engine with Advanced Formatting.
     """
-    data = payload.get("data", payload) # Support both new payload and legacy flat dict
-    confidence = payload.get("confidence", {})
-
-    logger.info("Starting Excel generation process...")
-
-    # 1. Validation & Cleaning Layer
-    try:
-        cleaned_data = {
-            "consumer_name": str(data.get("consumer_name") or DEFAULTS["consumer_name"]),
-            "consumer_number": str(data.get("consumer_number") or DEFAULTS["consumer_number"]),
-            "units": clean_numeric(data.get("units")),
-            "amount": clean_numeric(data.get("amount")),
-            "tariff": clean_numeric(data.get("tariff") or DEFAULTS["tariff"]),
-        }
-        
-        logger.info(f"Cleaned Data: {cleaned_data}")
-
-        # Required Field Validation
-        if cleaned_data["units"] == 0 or cleaned_data["amount"] == 0:
-            logger.error("Validation failed: Units or Amount is missing/zero.")
-            raise ValueError("Critical data missing: Units and Amount are required.")
-
-        # 2. Confidence Awareness
-        for field, score in confidence.items():
-            if score < 0.6:
-                logger.warning(f"LOW CONFIDENCE ALERT: Field '{field}' has confidence {score * 100}%. Please verify manually.")
-
-    except Exception as e:
-        logger.error(f"Data validation/cleaning error: {str(e)}")
-        raise
-
-    # 3. Excel Writing Layer
+    data = payload.get("data", payload)
+    
     if not os.path.exists(TEMPLATE_PATH):
-        logger.error(f"Template not found at {TEMPLATE_PATH}")
         raise FileNotFoundError(f"Template not found at {TEMPLATE_PATH}")
 
     try:
         wb = openpyxl.load_workbook(TEMPLATE_PATH)
-        ws = wb.active
+        
+        # Apply to all sheets (Requirements check)
+        for ws in wb.worksheets:
+            logger.info(f"Styling sheet: {ws.title}")
+            
+            # 1. Row Height for Header
+            ws.row_dimensions[1].height = 30
+            
+            # 2. Data Mapping (Assumes Bill Data is on the active/main sheet)
+            if ws == wb.active:
+                # Write and Style Labels (A3:A8)
+                labels_map = {
+                    "A3": "Consumer Name:",
+                    "A4": "Consumer Number:",
+                    "A5": "Units Consumed (kWh):",
+                    "A6": "Total Bill Amount (₹):",
+                    "A7": "Tariff / Rate (₹/kWh):",
+                    "A8": "Extraction Date:"
+                }
+                for cell_ref, val in labels_map.items():
+                    ws[cell_ref] = val
+                    apply_cell_styling(ws[cell_ref], is_label=True)
 
-        # Mapping data to cells with proper types
-        # B3: Consumer Name
-        ws['B3'] = cleaned_data["consumer_name"]
-        
-        # B4: Consumer Number
-        ws['B4'] = cleaned_data["consumer_number"]
-        
-        # B5: Units Consumed (Numeric)
-        ws['B5'] = cleaned_data["units"]
-        ws['B5'].number_format = '#,##0.00'
-        
-        # B6: Total Bill Amount (Numeric/Currency)
-        ws['B6'] = cleaned_data["amount"]
-        ws['B6'].number_format = '"₹"#,##0.00'
-        
-        # B7: Tariff / Rate (Numeric)
-        ws['B7'] = cleaned_data["tariff"]
-        ws['B7'].number_format = '0.00'
-        
-        # B8: Extraction Date
-        ws['B8'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                # Write and Style Values (B3:B8)
+                ws['B3'] = str(data.get("consumer_name") or "Valued Customer")
+                ws['B4'] = str(data.get("consumer_number") or "N/A")
+                
+                # Numeric fields with specific formatting
+                ws['B5'] = int(clean_numeric(data.get("units")))
+                ws['B5'].number_format = '#,##0' # Integer
+                
+                ws['B6'] = clean_numeric(data.get("amount"))
+                ws['B6'].number_format = '₹#,##0.00' # Currency
+                
+                ws['B7'] = clean_numeric(data.get("tariff"))
+                ws['B7'].number_format = '0.00' # Float
+                
+                ws['B8'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+                # Apply styling to value cells
+                for row in ws.iter_rows(min_row=3, max_row=8, min_col=2, max_col=2):
+                    for cell in row:
+                        apply_cell_styling(cell)
+
+            # 3. Final Polish: Auto-adjust and Spacing
+            auto_adjust_columns(ws)
 
         wb.save(output_path)
-        logger.info(f"Successfully generated Excel report at {output_path}")
+        logger.info(f"Professional Excel report saved: {output_path}")
         return output_path
 
     except Exception as e:
-        logger.error(f"Excel writing error: {str(e)}")
-        raise RuntimeError(f"Failed to write to Excel template: {str(e)}")
+        logger.error(f"Excel styling/writing error: {str(e)}")
+        raise
