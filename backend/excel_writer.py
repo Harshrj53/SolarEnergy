@@ -3,7 +3,7 @@ import datetime
 import os
 
 # Calculate template path relative to this file
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_PATH = os.path.join(BASE_DIR, "templates", "solar_template.xlsx")
 
 def write_to_template(data, output_path):
