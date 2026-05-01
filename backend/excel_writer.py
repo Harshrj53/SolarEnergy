@@ -1,5 +1,6 @@
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+from openpyxl.utils import get_column_letter
 import datetime
 import os
 import logging
@@ -30,7 +31,8 @@ def write_section_header(ws, row_idx, text):
     """
     # 1. Expand Merge Width to Full A:D
     cell_range = f"A{row_idx}:D{row_idx}"
-    ws.unmerge_cells(cell_range) if cell_range in ws.merged_cells else None
+    if cell_range in ws.merged_cells:
+        ws.unmerge_cells(cell_range)
     ws.merge_cells(cell_range)
     
     cell = ws.cell(row=row_idx, column=1)
@@ -53,18 +55,16 @@ def write_section_header(ws, row_idx, text):
 
 def setup_page_layout(ws):
     """
-    Sets explicit column widths and main header height.
+    Sets initial page layout.
     """
-    ws.column_dimensions['A'].width = 18
-    ws.column_dimensions['B'].width = 18
-    ws.column_dimensions['C'].width = 22
-    ws.column_dimensions['D'].width = 22
+    # Freeze header row 1
+    ws.freeze_panes = 'A2'
 
     # Main Header A1:D1
     ws.row_dimensions[1].height = 45
     ws.merge_cells('A1:D1')
     header = ws['A1']
-    header.alignment = Alignment(horizontal="center", vertical="center")
+    header.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     header.font = Font(bold=True, size=16)
 
 def write_data_row(ws, row_idx, label, value, number_format=None):
@@ -84,7 +84,7 @@ def write_data_row(ws, row_idx, label, value, number_format=None):
     c_val.value = value
     if number_format:
         c_val.number_format = number_format
-    c_val.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    c_val.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     ws.row_dimensions[row_idx].height = 25
     for col in range(1, 5):
@@ -97,6 +97,62 @@ def clean_numeric(value):
     cleaned = re.sub(r"[^\d.]", "", str(value).replace(',', ''))
     try: return float(cleaned)
     except: return 0.0
+
+def apply_auto_formatting(ws):
+    """
+    Applies auto-adjustments to column widths, row heights, and ensures text wrapping.
+    """
+    # Freeze header row
+    ws.freeze_panes = 'A2'
+    
+    col_widths = {}
+    
+    for row in ws.iter_rows():
+        row_max_height = 15
+        
+        for cell in row:
+            if cell.alignment:
+                cell.alignment = Alignment(
+                    horizontal=cell.alignment.horizontal,
+                    vertical="center",
+                    wrap_text=True
+                )
+            else:
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+                
+            if cell.value is not None:
+                text = str(cell.value)
+                
+                is_merged = False
+                for merge_range in ws.merged_cells.ranges:
+                    if cell.coordinate in merge_range:
+                        is_merged = True
+                        break
+                
+                if not is_merged:
+                    length = len(text)
+                    col_letter = cell.column_letter
+                    if col_letter not in col_widths or length > col_widths[col_letter]:
+                        col_widths[col_letter] = length
+
+                num_newlines = text.count('\n')
+                lines = num_newlines + 1
+                
+                estimated_height = lines * 15
+                if estimated_height > row_max_height:
+                    row_max_height = estimated_height
+        
+        current_height = ws.row_dimensions[row[0].row].height
+        if current_height is None or current_height < row_max_height + 5:
+            ws.row_dimensions[row[0].row].height = row_max_height + 5
+
+    for col_letter, max_len in col_widths.items():
+        adjusted_width = (max_len + 2) * 1.2
+        if adjusted_width > 50:
+            adjusted_width = 50
+        if adjusted_width < 15:
+            adjusted_width = 15
+        ws.column_dimensions[col_letter].width = adjusted_width
 
 def write_to_template(payload, output_path):
     """
@@ -122,6 +178,9 @@ def write_to_template(payload, output_path):
         write_data_row(ws, 7, "Rate (₹/kWh)", clean_numeric(data.get("tariff")), number_format='0.00')
         write_data_row(ws, 8, "Extraction Date", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
 
+        # Consistent spacing between sections
+        ws.row_dimensions[9].height = 15
+
         # Section 2: Load Recommendation (Fixing the Cutoff Issue)
         write_section_header(ws, 10, "Calculated Solar Load Recommendation & Estimate")
         
@@ -129,6 +188,18 @@ def write_to_template(payload, output_path):
         units = clean_numeric(data.get("units"))
         solar_load = round(units / 120, 2) if units > 0 else 0
         write_data_row(ws, 11, "Recommended Solar Capacity", f"{solar_load} kW")
+
+        # Apply formatting to both sheets
+        target_sheets = ["Bill Data", "Solar Calculation"]
+        for sheet_name in target_sheets:
+            if sheet_name in wb.sheetnames:
+                apply_auto_formatting(wb[sheet_name])
+            elif sheet_name == "Bill Data" and "Sheet" in wb.sheetnames:
+                wb["Sheet"].title = "Bill Data"
+                apply_auto_formatting(wb["Bill Data"])
+        
+        if wb.active.title not in target_sheets:
+            apply_auto_formatting(wb.active)
 
         wb.save(output_path)
         logger.info(f"Report generated successfully with cutoff-prevention: {output_path}")
