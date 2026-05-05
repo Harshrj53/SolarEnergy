@@ -14,9 +14,19 @@ def extract_text_from_pdf(file_bytes):
     return text
 
 def extract_text_from_image(file_bytes):
-    """Extracts text from an image file using pytesseract."""
+    """Extracts text from an image file using pytesseract with Marathi support."""
     image = Image.open(io.BytesIO(file_bytes))
-    text = pytesseract.image_to_string(image)
+    
+    # Preprocessing: Convert to grayscale for better OCR
+    image = image.convert('L')
+    
+    # Use both English and Marathi for OCR
+    try:
+        text = pytesseract.image_to_string(image, lang='eng+mar')
+    except Exception:
+        # Fallback to English only if mar language pack is missing
+        text = pytesseract.image_to_string(image, lang='eng')
+        
     return text
 
 def extract_text(file_bytes, filename):

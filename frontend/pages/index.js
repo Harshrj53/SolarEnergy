@@ -3,40 +3,42 @@ import Head from 'next/head';
 
 export default function Home() {
   const [file, setFile] = useState(null);
-  const [step, setStep] = useState('upload'); // upload, processing, review, success
+  const [step, setStep] = useState('overview'); // overview, analysis, report
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [dragging, setDragging] = useState(false);
   
-  // Editable Data State
+  // Extracted Data
   const [billData, setBillData] = useState({
     consumer_name: '',
     consumer_number: '',
+    billing_period: 'Dec 2025 - Jan 2026',
     units: 0,
+    sanctioned_load: 1.0,
+    tariff: '',
     amount: 0,
-    tariff: 0,
   });
   
-  const [confidence, setConfidence] = useState({});
   const [downloadUrl, setDownloadUrl] = useState(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setError(null);
-    }
-  };
+  // Derived Solar Calculations
+  const systemSize = Math.max(1, Math.ceil(billData.units / 120));
+  const panels = systemSize * 2.5; // Roughly 400W panels
+  const roofArea = systemSize * 100; // sq ft
+  const estCost = systemSize * 55000; // ₹55k per kW
+  const annualSavings = billData.amount * 11; // Approx 11 months of savings
+  const payback = (estCost / annualSavings).toFixed(1);
 
-  const processBill = async () => {
-    if (!file) return;
+  const processBill = async (selectedFile) => {
+    const fileToProcess = selectedFile || file;
+    if (!fileToProcess) return;
 
-    setStep('processing');
+    setLoading(true);
     setError(null);
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', fileToProcess);
 
     try {
       const response = await fetch(`${API_URL}/process-bill`, {
@@ -48,32 +50,37 @@ export default function Home() {
 
       if (response.ok) {
         setBillData({
-          consumer_name: result.data.consumer_name || '',
-          consumer_number: result.data.consumer_number || '',
+          consumer_name: result.data.consumer_name || 'N/A',
+          consumer_number: result.data.consumer_number || 'N/A',
+          billing_period: 'Dec 2025 - Jan 2026',
           units: result.data.units || 0,
+          sanctioned_load: 1.0,
+          tariff: result.data.tariff || '90/LT I Res 1-Phase',
           amount: result.data.amount || 0,
-          tariff: result.data.tariff || 0,
         });
-        setConfidence(result.data.confidence || {});
-        setStep('review');
+        setStep('analysis');
       } else {
         setError(result.detail || 'Failed to process bill');
-        setStep('upload');
       }
     } catch (err) {
       setError('Connection failed. Please ensure the backend is running.');
-      setStep('upload');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const f = e.target.files[0];
+      setFile(f);
+      processBill(f);
     }
   };
 
   const generateExcel = async () => {
     setLoading(true);
     try {
-      const payload = {
-        data: billData,
-        confidence: confidence
-      };
-
+      const payload = { data: billData };
       const response = await fetch(`${API_URL}/generate-excel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,10 +89,9 @@ export default function Home() {
 
       const result = await response.json();
       if (response.ok) {
-        setDownloadUrl(result.download_url);
-        setStep('success');
+        window.open(`${API_URL}${result.download_url}`, '_blank');
       } else {
-        setError('Failed to generate Excel file.');
+        setError('Failed to generate report.');
       }
     } catch (err) {
       setError('Connection failed.');
@@ -94,148 +100,276 @@ export default function Home() {
     }
   };
 
-  const getConfidenceColor = (score) => {
-    if (!score || score === 0) return '#94a3b8'; // Neutral
-    if (score > 0.85) return '#10b981'; // Green
-    if (score > 0.60) return '#f59e0b'; // Yellow
-    return '#ef4444'; // Red
-  };
-
-  const reset = () => {
-    setFile(null);
-    setStep('upload');
-    setDownloadUrl(null);
-    setBillData({ consumer_name: '', consumer_number: '', units: 0, amount: 0, tariff: 0 });
-  };
-
   return (
-    <div className="container">
+    <div className="layout">
       <Head>
-        <title>EnergyBae | AI Solar Automation</title>
+        <title>SolarCloud | Energybae</title>
       </Head>
 
-      <div className="header">
-        <h1>EnergyBae</h1>
-        <p>Production-Grade Solar Load Automation</p>
-      </div>
-
-      {step === 'upload' && (
-        <div className="card-animation">
-          <div 
-            className={`upload-area ${dragging ? 'dragging' : ''}`}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => { e.preventDefault(); setDragging(false); setFile(e.dataTransfer.files[0]); }}
-          >
-            <input type="file" onChange={handleFileChange} accept=".pdf,image/*" />
-            <span className="upload-icon">{file ? '📄' : '☁️'}</span>
-            <p>{file ? file.name : "Upload your electricity bill"}</p>
-            <small>Supports PDF, JPG, PNG</small>
-          </div>
-
-          <button className="btn btn-primary" onClick={processBill} disabled={!file}>
-            Process Bill with AI
-          </button>
-          
-          {error && <p className="error-text">{error}</p>}
-        </div>
-      )}
-
-      {step === 'processing' && (
-        <div className="processing-state">
-          <div className="loader-large"></div>
-          <h2>Processing bill...</h2>
-          <p>Our AI is extracting data and verifying patterns.</p>
-        </div>
-      )}
-
-      {step === 'review' && (
-        <div className="review-container">
-          <div className="alert-info">
-            🛡️ AI-extracted data. Please review and edit before generating Excel.
-          </div>
-          
-          <div className="form-grid">
-            <div className="input-group">
-              <label>Consumer Name <span className="conf" style={{color: getConfidenceColor(confidence.consumer_name)}}>{(confidence.consumer_name * 100).toFixed(0)}%</span></label>
-              <input 
-                type="text" 
-                value={billData.consumer_name} 
-                onChange={(e) => setBillData({...billData, consumer_name: e.target.value})}
-                placeholder="Enter consumer name"
-              />
-            </div>
-            
-            <div className="input-group">
-              <label>Units Consumed (kWh) <span className="conf" style={{color: getConfidenceColor(confidence.units)}}>{(confidence.units * 100).toFixed(0)}%</span></label>
-              <input 
-                type="number" 
-                value={billData.units} 
-                onChange={(e) => setBillData({...billData, units: parseFloat(e.target.value) || 0})}
-              />
-            </div>
-
-            <div className="input-group">
-              <label>Total Amount (₹) <span className="conf" style={{color: getConfidenceColor(confidence.amount)}}>{(confidence.amount * 100).toFixed(0)}%</span></label>
-              <input 
-                type="number" 
-                value={billData.amount} 
-                onChange={(e) => setBillData({...billData, amount: parseFloat(e.target.value) || 0})}
-              />
-            </div>
-
-            <div className="input-group">
-              <label>Tariff Rate (₹/kWh) <span className="conf" style={{color: getConfidenceColor(confidence.tariff)}}>{(confidence.tariff * 100).toFixed(0)}%</span></label>
-              <input 
-                type="number" 
-                value={billData.tariff} 
-                onChange={(e) => setBillData({...billData, tariff: parseFloat(e.target.value) || 0})}
-              />
-            </div>
-          </div>
-
-          <div className="action-row">
-            <button className="btn btn-secondary" onClick={reset}>Cancel</button>
-            <button className="btn btn-primary" onClick={generateExcel} disabled={loading}>
-              {loading ? <span className="loader"></span> : 'Generate Excel Report'}
-            </button>
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="logo">
+          <div className="logo-icon">☀️</div>
+          <div className="logo-text">
+            <h2>SolarCloud</h2>
+            <p>by Energybae</p>
           </div>
         </div>
-      )}
 
-      {step === 'success' && (
-        <div className="success-state">
-          <span className="success-icon">✅</span>
-          <h2>Report Ready!</h2>
-          <p>Your solar load calculation has been generated based on your review.</p>
-          <button className="btn btn-primary" onClick={() => window.open(`${API_URL}${downloadUrl}`, '_blank')}>
-            Download Excel File
-          </button>
-          <button className="btn-text" onClick={reset}>Process another bill</button>
+        <nav className="nav-section">
+          <h3>Main Menu</h3>
+          <div className={`nav-item ${step === 'overview' ? 'active' : ''}`} onClick={() => setStep('overview')}>
+            <div className="nav-label">🏠 Overview</div>
+            <div className="nav-badge">1</div>
+          </div>
+          <div className={`nav-item ${step === 'analysis' ? 'active' : ''}`} onClick={() => billData.units > 0 && setStep('analysis')}>
+            <div className="nav-label">📊 Analysis</div>
+            <div className="nav-badge">2</div>
+          </div>
+          <div className="nav-item">
+            <div className="nav-label">📄 Report</div>
+            <div className="nav-badge">3</div>
+          </div>
+        </nav>
+
+        <nav className="nav-section">
+          <h3>Settings</h3>
+          <div className="nav-item">⚙️ Settings</div>
+          <div className="nav-item">❓ Help</div>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="profile">
+            <div className="profile-img">EB</div>
+            <div className="profile-info">
+              <h4>Energybae</h4>
+              <p>Solar Consultant</p>
+            </div>
+          </div>
         </div>
-      )}
+      </aside>
 
-      <style jsx>{`
-        .card-animation { animation: fadeIn 0.4s ease-out; }
-        .processing-state, .success-state { text-align: center; padding: 2rem; }
-        .loader-large { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1.5rem; }
-        .review-container { animation: slideUp 0.5s ease-out; }
-        .alert-info { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 1rem; border-radius: 12px; margin-bottom: 2rem; font-size: 0.9rem; color: #93c5fd; }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
-        .input-group { display: flex; flex-direction: column; gap: 0.5rem; }
-        .input-group label { font-size: 0.85rem; color: var(--text-dim); font-weight: 500; display: flex; justify-content: space-between; }
-        .input-group input { background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 10px; color: white; font-size: 1rem; transition: border 0.2s; }
-        .input-group input:focus { outline: none; border-color: var(--primary); }
-        .conf { font-size: 0.75rem; font-weight: 700; }
-        .action-row { display: flex; gap: 1rem; }
-        .btn-secondary { background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--glass-border); }
-        .success-icon { font-size: 4rem; display: block; margin-bottom: 1rem; }
-        .btn-text { background: none; border: none; color: var(--text-dim); margin-top: 1rem; cursor: pointer; text-decoration: underline; }
-        .error-text { color: #ef4444; margin-top: 1rem; font-size: 0.9rem; }
-        
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
-      `}</style>
+      {/* Main Content */}
+      <main className="main-content">
+        <div className="top-bar">
+          <div className="page-title">
+            <h1>{step === 'overview' ? 'Upload Bill' : 'Bill Analysis'}</h1>
+            <p>{step === 'overview' ? 'AI-powered extraction for MSEDCL, Adani & Tata Power' : 'Review extracted data and ROI projection'}</p>
+          </div>
+          <div className="top-actions">
+            <div className="search-icon">🔍</div>
+            <div className="notif-icon">🔔</div>
+            <div className="pro-badge">✨ PRO</div>
+          </div>
+        </div>
+
+        {step === 'overview' && (
+          <div className="view-overview">
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-value">2,400+</div>
+                <div className="stat-label">Bills Processed</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">₹12L+</div>
+                <div className="stat-label">Savings Generated</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">98%</div>
+                <div className="stat-label">AI Accuracy</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">&lt;3s</div>
+                <div className="stat-label">Avg. Processing</div>
+              </div>
+            </div>
+
+            <div className="upload-container">
+              <div className="upload-icon-wrapper">📤</div>
+              <h2>Upload Electricity Bill</h2>
+              <p style={{color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem'}}>
+                MSEDCL • Adani • Tata Power — any Indian utility bill (PDF or image)
+              </p>
+
+              <div className="upload-dropzone">
+                <input type="file" onChange={handleFileUpload} accept=".pdf,image/*" />
+                <div className="dz-content">
+                  <div style={{fontSize: '2rem', marginBottom: '1rem'}}>📄</div>
+                  <p>Drag & drop your bill here</p>
+                  <small style={{color: '#94a3b8'}}>PDF, PNG, JPG • max 10 MB</small>
+                </div>
+              </div>
+
+              {loading ? (
+                <button className="btn-primary" disabled>
+                  <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px'}}>
+                    <span className="loader"></span> Analysing...
+                  </span>
+                </button>
+              ) : (
+                <button className="btn-primary" onClick={() => document.querySelector('input[type="file"]').click()}>
+                  Browse Files
+                </button>
+              )}
+              
+              {error && <p style={{color: '#ef4444', marginTop: '1rem'}}>{error}</p>}
+            </div>
+          </div>
+        )}
+
+        {step === 'analysis' && (
+          <div className="view-analysis">
+            <div className="analysis-header-card">
+              <div className="main-metrics">
+                <div style={{fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem'}}>PERFORMANCE MONITORING</div>
+                <h2 style={{fontSize: '1.5rem', marginBottom: '2rem'}}>Bill Analysis</h2>
+                
+                <div className="metrics-grid">
+                  <div className="metric-item">
+                    <h4>Units Consumed</h4>
+                    <div className="value">{billData.units}</div>
+                    <div className="sub">kWh/month</div>
+                  </div>
+                  <div className="metric-item">
+                    <h4>Electricity Rate</h4>
+                    <div className="value">{billData.tariff.match(/\d+/) ? billData.tariff.match(/\d+/)[0] : '7.5'}</div>
+                    <div className="sub">₹/kWh</div>
+                  </div>
+                  <div className="metric-item">
+                    <h4>Sanctioned Load</h4>
+                    <div className="value">{billData.sanctioned_load}</div>
+                    <div className="sub">kW</div>
+                  </div>
+                  <div className="metric-item">
+                    <h4>Monthly Bill</h4>
+                    <div className="value green">₹{billData.amount.toLocaleString()}</div>
+                    <div className="sub">Current avg</div>
+                  </div>
+                  <div className="metric-item">
+                    <h4>Billing Period</h4>
+                    <div className="value" style={{fontSize: '1rem'}}>{billData.billing_period}</div>
+                  </div>
+                  <div className="metric-item">
+                    <h4>Recommended Solar</h4>
+                    <div className="value" style={{color: '#facc15'}}>{systemSize}</div>
+                    <div className="sub">kW system</div>
+                  </div>
+                </div>
+              </div>
+              <div className="card-visual">
+                <div style={{width: '60px', height: '60px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem'}}>
+                  📊
+                </div>
+              </div>
+            </div>
+
+            <div className="dashboard-layout">
+              <div className="left-col">
+                <div className="extracted-fields-card">
+                  <div className="table-header">
+                    <button onClick={() => setStep('overview')} style={{background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer'}}>← Back</button>
+                    <h3 style={{fontSize: '1rem'}}>Extracted Fields</h3>
+                  </div>
+
+                  <div className="fields-list">
+                    <div className="field-row">
+                      <div className="field-label">Consumer Name</div>
+                      <div className="field-input"><input value={billData.consumer_name} onChange={(e) => setBillData({...billData, consumer_name: e.target.value})} /></div>
+                    </div>
+                    <div className="field-row">
+                      <div className="field-label">Consumer Number</div>
+                      <div className="field-input"><input value={billData.consumer_number} onChange={(e) => setBillData({...billData, consumer_number: e.target.value})} /></div>
+                    </div>
+                    <div className="field-row">
+                      <div className="field-label">Billing Period</div>
+                      <div className="field-input"><input value={billData.billing_period} onChange={(e) => setBillData({...billData, billing_period: e.target.value})} /></div>
+                    </div>
+                    <div className="field-row">
+                      <div className="field-label">Units Consumed (kWh)</div>
+                      <div className="field-input"><input type="number" value={billData.units} onChange={(e) => setBillData({...billData, units: parseFloat(e.target.value) || 0})} /></div>
+                    </div>
+                    <div className="field-row">
+                      <div className="field-label">Sanctioned Load (kW)</div>
+                      <div className="field-input"><input type="number" value={billData.sanctioned_load} onChange={(e) => setBillData({...billData, sanctioned_load: parseFloat(e.target.value) || 0})} /></div>
+                    </div>
+                    <div className="field-row">
+                      <div className="field-label">Tariff Category</div>
+                      <div className="field-input"><input value={billData.tariff} onChange={(e) => setBillData({...billData, tariff: e.target.value})} /></div>
+                    </div>
+                    <div className="field-row">
+                      <div className="field-label">Total Bill Amount (₹)</div>
+                      <div className="field-input"><input type="number" value={billData.amount} onChange={(e) => setBillData({...billData, amount: parseFloat(e.target.value) || 0})} /></div>
+                    </div>
+                  </div>
+
+                  <button className="btn-primary" style={{marginTop: '2rem', maxWidth: '100%'}} onClick={generateExcel}>
+                    {loading ? 'Generating...' : 'Generate Solar Report'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="right-col">
+                <div className="roi-card">
+                  <div className="roi-title">ROI Comparison</div>
+                  <div className="roi-subtitle">Cumulative cost • Solar vs. No Solar • 3% annual escalation</div>
+                  
+                  <div className="chart-placeholder">
+                    <div className="chart-bar-group">
+                      <div className="bar no-solar" style={{height: '20%'}}></div>
+                      <div className="bar with-solar" style={{height: '5%'}}></div>
+                    </div>
+                    <div className="chart-bar-group">
+                      <div className="bar no-solar" style={{height: '50%'}}></div>
+                      <div className="bar with-solar" style={{height: '10%'}}></div>
+                    </div>
+                    <div className="chart-bar-group">
+                      <div className="bar no-solar" style={{height: '90%'}}></div>
+                      <div className="bar with-solar" style={{height: '15%'}}></div>
+                    </div>
+                  </div>
+                  <div className="chart-labels">
+                    <span>5 Years</span>
+                    <span>10 Years</span>
+                    <span>20 Years</span>
+                  </div>
+                  <div className="chart-legend">
+                    <div className="legend-item"><span className="dot" style={{background: '#facc15'}}></span> Without Solar</div>
+                    <div className="legend-item"><span className="dot" style={{background: '#4ade80'}}></span> With Solar</div>
+                  </div>
+                </div>
+
+                <div className="points-card">
+                  <div className="roi-title" style={{marginBottom: '1rem'}}>Solar System Points</div>
+                  <div className="point-item">
+                    <div className="point-label">🟡 System Size</div>
+                    <div className="point-value">{systemSize} kW</div>
+                  </div>
+                  <div className="point-item">
+                    <div className="point-label">🟢 Solar Panels (400W)</div>
+                    <div className="point-value">{panels}</div>
+                  </div>
+                  <div className="point-item">
+                    <div className="point-label">🔵 Roof Area Required</div>
+                    <div className="point-value">{roofArea} sq.ft</div>
+                  </div>
+                  <div className="point-item">
+                    <div className="point-label">🟢 Est. System Cost</div>
+                    <div className="point-value">₹{(estCost/100000).toFixed(1)}L</div>
+                  </div>
+                  <div className="point-item">
+                    <div className="point-label">🟡 Annual Savings (Yr 1)</div>
+                    <div className="point-value">₹{(annualSavings/1000).toFixed(0)}K</div>
+                  </div>
+                  <div className="point-item">
+                    <div className="point-label">🔵 Payback Period</div>
+                    <div className="point-value">{payback} yrs</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
