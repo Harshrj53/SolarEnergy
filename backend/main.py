@@ -55,16 +55,21 @@ async def process_bill(file: UploadFile = File(...)):
         with open(input_path, "rb") as f:
             file_bytes = f.read()
         
-        raw_text = extract_text(file_bytes, file.filename)
-        if not raw_text.strip():
-            raise HTTPException(status_code=400, detail="No readable text found in this file.")
+        is_img = ext.lower() in ['.jpg', '.jpeg', '.png']
         
-        parsed_data = parse_bill_data(raw_text)
+        if is_img:
+            # 100% Native Gemini Vision Path
+            parsed_data = parse_bill_data(file_bytes, is_image=True)
+        else:
+            # PDF Path: Extract text first
+            raw_text = extract_text(file_bytes, file.filename)
+            parsed_data = parse_bill_data(raw_text, is_image=False)
         
         return {
             "success": True,
             "filename": file.filename,
-            "data": parsed_data
+            "data": parsed_data,
+            "engine": "Gemini 1.5 Native"
         }
         
     except Exception as e:
