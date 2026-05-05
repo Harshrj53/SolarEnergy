@@ -14,12 +14,18 @@ from excel_writer import write_to_template
 
 app = FastAPI(title="EnergyBae AI Bill Extraction API")
 
-# Enable CORS for frontend
+# Enable CORS with explicit origins for production stability
+origins = [
+    "http://localhost:3000",
+    "https://solar-energy-chi.vercel.app",
+    "https://solar-energy-git-main-harshrj53s-projects.vercel.app"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # Keeping * for now to ensure connectivity, but being explicit is better
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
