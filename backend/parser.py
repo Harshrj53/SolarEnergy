@@ -74,20 +74,18 @@ def parse_bill_data(text):
     if tariff_match:
         data["tariff"] = tariff_match.group(1).strip()
 
-    # 7. SANCTIONED LOAD (मंजूरी भार / Connected Load)
-    load_match = re.search(r"(?:मंजूरी भार|Connected Load|Sanctioned Load)[^\d]*([\d.]+)", full_process_text, re.IGNORECASE)
+    # 7. SANCTIONED LOAD (मंजूर भार / Connected Load)
+    load_match = re.search(r"(?:मंजूर भार|मंजूरी भार|Connected Load|Sanctioned Load)[^\d]*([\d.]+)", full_process_text, re.IGNORECASE)
     if load_match:
         data["sanctioned_load"] = float(load_match.group(1))
 
     # 8. DATES
-    date_match = re.search(r"(?:देयक दिनांक|Bill Date)[^\d]*([\d-]{10})", full_process_text, re.IGNORECASE)
+    date_match = re.search(r"(?:देयक दिनांक|Bill Date)[^\d]*([\d.-]{8,10})", full_process_text, re.IGNORECASE)
     if date_match:
         data["bill_date"] = date_match.group(1)
         
-    due_match = re.search(r"(?:देय दिनांक|Due Date)[^\d]*([\d-]{10})", full_process_text, re.IGNORECASE)
+    due_match = re.search(r"(?:देय दिनांक|Due Date)[^\d]*([\d.-]{8,10})", full_process_text, re.IGNORECASE)
     if due_match:
         data["due_date"] = due_match.group(1)
-
-    return data
 
     return data

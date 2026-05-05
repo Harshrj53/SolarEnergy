@@ -21,27 +21,26 @@ def extract_text_from_pdf(file_bytes):
         return "SCANNED_PDF_DETECTED" 
     
     return text
-
-def extract_text_from_image(file_bytes):
-    """Extracts text from an image file with performance optimizations."""
-    image = Image.open(io.BytesIO(file_bytes))
+def extract_text_from_image(image_bytes):
+    """Extracts text from an image with enhancement for low-quality photos."""
+    image = Image.open(io.BytesIO(image_bytes))
     
-    # Optimization 1: Resize if too large
-    # 1500px is usually enough for MSEDCL bills and much faster
-    max_width = 1500
-    if image.width > max_width:
-        ratio = max_width / float(image.width)
-        height = int(float(image.height) * float(ratio))
-        image = image.resize((max_width, height), Image.Resampling.LANCZOS)
-
-    # Optimization 2: Preprocessing
+    # Pre-processing for better OCR
     image = image.convert('L') # Grayscale
     
-    # Optimization 3: Faster Tesseract config
-    # --oem 3 (Default) is often faster than --oem 1 for simple layouts
-    # --psm 6 (Assume a single uniform block of text) can be faster for structured docs
-    custom_config = r'--oem 3 --psm 3'
+    from PIL import ImageEnhance, ImageFilter
+    # Increase contrast
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2.0)
     
+    # Sharpening
+    image = image.filter(ImageFilter.SHARPEN)
+    
+    # Scaling up if small
+    if image.width < 1500:
+        image = image.resize((image.width * 2, image.height * 2), Image.Resampling.LANCZOS)
+
+    custom_config = r'--oem 3 --psm 3'
     try:
         text = pytesseract.image_to_string(image, lang='eng+mar', config=custom_config)
     except Exception:
