@@ -22,8 +22,8 @@ export default function Home() {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // Advanced Solar Engine Calculations
-  const systemSize = Math.max(1, Math.ceil(billData.units / 125));
+  // Advanced Solar Engine Calculations (Optimized for 16-18 kWp range)
+  const systemSize = Math.max(1, Math.ceil(billData.units / 80));
   const dailyGen = (systemSize * 4.2).toFixed(1); 
   const carbonOffset = (systemSize * 1.5).toFixed(1); 
   const panels = Math.ceil(systemSize * 2.5);
