@@ -7,3 +7,4 @@ pillow
 openpyxl
 pandas
 python-dotenv
+google-generativeai

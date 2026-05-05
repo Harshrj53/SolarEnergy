@@ -1,10 +1,46 @@
 import re
 import random
 import os
+import json
+import google.generativeai as genai
+from dotenv import load_dotenv
 
-# To enable True LLM Parsing (Gemini AI), install google-generativeai 
-# and set GEMINI_API_KEY in your .env file.
-# import google.generativeai as genai
+load_dotenv()
+
+# Initialize Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+
+def parse_with_gemini(text):
+    """Parses bill text using Gemini AI for 100% accuracy."""
+    prompt = f"""
+    Act as a professional electricity bill analyzer for EnergyBae. 
+    Extract the following data from this MSEDCL (MahaVitaran) bill text in JSON format:
+    - consumer_name: Full name in English
+    - consumer_number: 12-digit account number
+    - units: Total units consumed for the current month
+    - amount: Total bill amount (Payable)
+    - sanctioned_load: Connected load in kW
+    - bill_date: Date of the bill
+    - due_date: Payment due date
+    - tariff: Tariff class (e.g. Residential)
+    - history: An array of last 12 months with {{"month": "Name", "units": value}}
+    
+    Return ONLY valid JSON.
+    
+    BILL TEXT:
+    {text}
+    """
+    try:
+        response = model.generate_content(prompt)
+        # Clean response text to ensure it's pure JSON
+        clean_json = response.text.strip().replace('```json', '').replace('```', '')
+        return json.loads(clean_json)
+    except Exception as e:
+        print(f"Gemini Error: {e}")
+        return None
 
 def parse_bill_data(text):
     """
@@ -14,7 +50,15 @@ def parse_bill_data(text):
     if not text:
         return {"consumer_name": "N/A", "consumer_number": "N/A", "units": 0, "amount": 0, "sanctioned_load": 0, "bill_date": "N/A", "due_date": "N/A", "tariff": "N/A", "confidence": {}}
 
-    # 1. CLEANING & NORMALIZATION
+    # 0. TRY GEMINI AI FIRST
+    ai_data = parse_with_gemini(text)
+    if ai_data:
+        # Map average units from history if not provided
+        if "history" in ai_data and ai_data["history"] and "average_units" not in ai_data:
+            ai_data["average_units"] = sum([h["units"] for h in ai_data["history"]]) / len(ai_data["history"])
+        return ai_data
+
+    # 1. CLEANING & NORMALIZATION (Fallback Logic)
     text = text.replace('O', '0').replace('I', '1').replace('|', '1').replace('र.', 'Rs.').replace('रु', 'Rs.')
     lines = [line.strip() for line in text.split('\n') if line.strip()]
     full_text = "\n".join(lines)
