@@ -3,89 +3,101 @@ import random
 
 def parse_bill_data(text):
     """
-    Surgical extraction for MSEDCL (MahaVitaran) bills v2.1
+    Semantic Extraction Engine v3.0 (Market Grade)
+    Designed to handle any MSEDCL bill quality or layout.
     """
     if not text:
-        return {"consumer_name": "N/A", "consumer_number": "N/A", "units": 0, "amount": 0, "tariff": "N/A", "confidence": {}}
+        return {"consumer_name": "N/A", "consumer_number": "N/A", "units": 0, "amount": 0, "sanctioned_load": 0, "bill_date": "N/A", "due_date": "N/A", "tariff": "N/A", "confidence": {}}
 
-    # Pre-clean: remove noise but keep line structure
-    text = text.replace('O', '0').replace('I', '1').replace('|', '1').replace('र.', 'Rs.')
+    # 1. CLEANING & NORMALIZATION
+    text = text.replace('O', '0').replace('I', '1').replace('|', '1').replace('र.', 'Rs.').replace('रु', 'Rs.')
     lines = [line.strip() for line in text.split('\n') if line.strip()]
+    full_text = "\n".join(lines)
     
-    # 1. FOCUS ON TOP 40 LINES (Avoids 90% of footer noise)
-    process_lines = lines[:40]
-    full_process_text = "\n".join(process_lines)
-
     data = {
-        "consumer_name": "ALTURA COMMON", 
+        "consumer_name": "N/A",
         "consumer_number": "N/A",
         "units": 0,
         "amount": 0,
         "sanctioned_load": 0,
         "bill_date": "N/A",
         "due_date": "N/A",
-        "tariff": "92/LT I Res 3-Phase",
-        "confidence": {"consumer_name": 0.5, "units": 0.5, "amount": 0.5}
+        "tariff": "Residential",
+        "confidence": {}
     }
 
-    # 2. CONSUMER NUMBER (12 Digits, tolerant of spaces)
-    # Search for exactly 12 digits, potentially separated by spaces
-    cons_match = re.search(r"(\d[\s\d]{10,14}\d)", full_process_text)
-    if cons_match:
-        clean_num = re.sub(r"\s+", "", cons_match.group(1))
-        if len(clean_num) >= 12:
-            data["consumer_number"] = clean_num[:12]
+    # 2. CONSUMER NUMBER (12-digit anchor)
+    # Market bills often have 12 digits, sometimes with spaces
+    all_12_digit_blocks = re.findall(r"(\d[\s\d]{10,14}\d)", full_text)
+    for block in all_12_digit_blocks:
+        clean = re.sub(r"\s+", "", block)
+        if len(clean) >= 12:
+            data["consumer_number"] = clean[:12]
+            break
 
-    # 3. CONSUMER NAME (Top-down search)
-    blacklist = ["MAHAVITARAN", "MSEDCL", "SUPPLY", "MONTH", "BILL", "ELECTRICITY", "BOARD"]
-    for line in process_lines[1:8]: # Check top lines
-        if line.isupper() and len(line) > 6:
-            if not any(b in line for b in blacklist):
-                data["consumer_name"] = line
+    # 3. UNITS (Search for 'एकूण वापर' or 'Total Units' and find closest number)
+    unit_labels = ["एकूण वापर", "वापर", "TOTAL UNITS", "USAGE", "UNITS", "KWH"]
+    for i, line in enumerate(lines):
+        if any(label in line.upper() for label in unit_labels):
+            # Scan this line and next 2 for a logical unit value (2-5 digits)
+            context = " ".join(lines[i:i+3])
+            # Look for 1.00 [units] 0 [units] pattern first
+            table_match = re.search(r"1\.00\s+(\d+)\s+0\s+(\d+)", context)
+            if table_match:
+                data["units"] = float(table_match.group(2))
                 break
-
-    # 4. UNITS (एकूण वापर)
-    # Look for the 'एकूण वापर' label and get the number on that line or next
-    for i, line in enumerate(process_lines):
-        if "वापर" in line or "Total Units" in line or "Usage" in line:
-            # Look for number in this line or next 2 lines
-            search_block = " ".join(process_lines[i:i+3])
-            nums = re.findall(r"\d{2,5}(?!\d)", search_block)
+            # Fallback: get the last number in the line
+            nums = re.findall(r"\d{2,5}(?!\d)", context)
             if nums:
-                data["units"] = float(nums[-1]) # Usually the last number is the final units
+                data["units"] = float(nums[-1])
                 break
 
-    # 5. AMOUNT (Rs. 59140.00)
-    # Search for currency patterns
-    amt_matches = re.findall(r"(?:Rs|रक्कम|Total|Payable)[^\d]*([\d,]+\.\d{2})", full_process_text, re.IGNORECASE)
-    if amt_matches:
-        data["amount"] = float(amt_matches[-1].replace(',', ''))
-    else:
-        # Fallback: largest decimal number in the top section
-        all_decs = re.findall(r"([\d,]+\.\d{2})", full_process_text)
+    # 4. AMOUNT (Rs. XXXXX.XX)
+    # Priority 1: Values near 'देयक रक्कम', 'Payable', or 'Rs.'
+    amt_labels = ["रक्कम", "PAYABLE", "TOTAL", "AMOUNT", "RS.", "DEYAK"]
+    for i, line in enumerate(lines):
+        if any(label in line.upper() for label in amt_labels):
+            # Look for decimal values in this line or next
+            context = " ".join(lines[i:i+2])
+            matches = re.findall(r"([\d,]+\.\d{2})", context)
+            if matches:
+                data["amount"] = float(matches[0].replace(',', ''))
+                break
+    
+    if data["amount"] == 0:
+        # Priority 2: Find any valid high-value decimal in the top section
+        all_decs = re.findall(r"([\d,]+\.\d{2})", "\n".join(lines[:30]))
         if all_decs:
-            nums = [float(x.replace(',', '')) for x in all_decs]
-            valid = [n for n in nums if 100 < n < 1000000]
-            if valid:
-                data["amount"] = max(valid)
+            nums = [float(x.replace(',', '')) for x in all_decs if float(x.replace(',', '')) > 100]
+            if nums: data["amount"] = nums[0]
 
-    # 6. TARIFF
-    tariff_match = re.search(r"(\d{2}/LT[^\n]+Phase)", full_process_text, re.IGNORECASE)
-    if tariff_match:
-        data["tariff"] = tariff_match.group(1).strip()
+    # 5. CONSUMER NAME (Semantic search near the top)
+    # Usually right below 'MAHAVITARAN' or above the address
+    blacklist = ["MAHAVITARAN", "MSEDCL", "SUPPLY", "MONTH", "BILL", "ELECTRICITY", "BOARD", "DETAILS", "CUSTOMER"]
+    for line in lines[1:15]:
+        words = line.split()
+        if 2 <= len(words) <= 5 and line.isupper() and not any(b in line.upper() for b in blacklist):
+            data["consumer_name"] = line
+            break
 
-    # 7. SANCTIONED LOAD (मंजूर भार / Connected Load)
-    load_match = re.search(r"(?:मंजूर भार|मंजूरी भार|Connected Load|Sanctioned Load)[^\d]*([\d.]+)", full_process_text, re.IGNORECASE)
+    # 6. SANCTIONED LOAD
+    load_match = re.search(r"(?:मंजूर भार|Connected|Sanctioned|Load)[^\d]*([\d.]+)", full_text, re.IGNORECASE)
     if load_match:
         data["sanctioned_load"] = float(load_match.group(1))
 
+    # 7. TARIFF
+    tariff_match = re.search(r"(\d{2}/LT[^\n]+Phase)", full_text, re.IGNORECASE)
+    if tariff_match:
+        data["tariff"] = tariff_match.group(1).strip()
+
     # 8. DATES
-    date_match = re.search(r"(?:देयक दिनांक|Bill Date)[^\d]*([\d.-]{8,10})", full_process_text, re.IGNORECASE)
-    if date_match:
-        data["bill_date"] = date_match.group(1)
-        
-    due_match = re.search(r"(?:देय दिनांक|Due Date)[^\d]*([\d.-]{8,10})", full_process_text, re.IGNORECASE)
-    if due_match:
-        data["due_date"] = due_match.group(1)
+    date_patterns = [r"(\d{2}[-./]\d{2}[-./]\d{4})", r"(\d{2}[-./]\d{2}[-./]\d{2})"]
+    all_dates = []
+    for p in date_patterns:
+        all_dates.extend(re.findall(p, full_text))
+    
+    if len(all_dates) >= 2:
+        data["bill_date"] = all_dates[0]
+        data["due_date"] = all_dates[1]
 
     return data
