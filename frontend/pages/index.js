@@ -23,7 +23,8 @@ export default function Home() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   // Advanced Solar Engine Calculations (Optimized for 16-18 kWp range)
-  const systemSize = Math.max(1, Math.ceil(billData.units / 80));
+  const avgUnits = billData.average_units || billData.units;
+  const systemSize = Math.max(1, Math.ceil(avgUnits / 80));
   const dailyGen = (systemSize * 4.2).toFixed(1); 
   const carbonOffset = (systemSize * 1.5).toFixed(1); 
   const panels = Math.ceil(systemSize * 2.5);
@@ -80,10 +81,36 @@ export default function Home() {
             plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } } },
             cutout: '70%'
           }
-        });
+        // 3. History Chart
+        const histCtx = document.getElementById('historyChart')?.getContext('2d');
+        if (histCtx) {
+          new Chart(histCtx, {
+            type: 'line',
+            data: {
+              labels: (billData.history || []).map(h => h.month),
+              datasets: [{
+                label: 'Units',
+                data: (billData.history || []).map(h => h.units),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: { display: false },
+                x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 8 } } }
+              }
+            }
+          });
+        }
       }
     }
-  }, [step, billData.units, yearlySavings]);
+  }, [step, billData.units, yearlySavings, billData.history]);
 
   const processBill = async (selectedFile) => {
     const fileToProcess = selectedFile || file;
@@ -113,6 +140,8 @@ export default function Home() {
           consumer_number: result.data.consumer_number || 'EXT-000000',
           billing_period: result.data.bill_date || 'Jan 2026',
           units: result.data.units || 0,
+          average_units: result.data.average_units || 0,
+          history: result.data.history || [],
           sanctioned_load: result.data.sanctioned_load || 0,
           tariff: result.data.tariff || 'Residential',
           amount: result.data.amount || 0,
@@ -343,12 +372,37 @@ export default function Home() {
                     </tr>
                   </tbody>
                 </table>
+                <table className="data-table">
+                  <thead>
+                    <tr style={{borderBottom: '1px solid rgba(255,255,255,0.05)'}}>
+                      <th style={{textAlign: 'left', padding: '10px', fontSize: '0.7rem', color: '#64748b'}}>MONTH</th>
+                      <th style={{textAlign: 'right', padding: '10px', fontSize: '0.7rem', color: '#64748b'}}>UNITS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(billData.history || []).map((h, i) => (
+                      <tr key={i} style={{borderBottom: '1px solid rgba(255,255,255,0.02)'}}>
+                        <td style={{padding: '8px', fontSize: '0.8rem'}}>{h.month}</td>
+                        <td style={{padding: '8px', textAlign: 'right', fontSize: '0.8rem', color: '#10b981'}}>{h.units}</td>
+                      </tr>
+                    ))}
+                    {(!billData.history || billData.history.length === 0) && (
+                      <tr><td colSpan="2" style={{textAlign: 'center', padding: '20px', color: '#475569', fontSize: '0.8rem'}}>No history detected in neural scan.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                
                 <button className="btn-neon" style={{marginTop: '2.5rem', width: '100%'}} onClick={generateReport}>
                   {loading ? 'ENCODING...' : 'GENERATE SOLAR BLUEPRINT'}
                 </button>
               </div>
 
               <div className="right-stack">
+                <div className="glass-panel" style={{marginBottom: '2rem', padding: '1.5rem'}}>
+                  <h4 style={{fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px'}}>Consumption History</h4>
+                  <canvas id="historyChart" style={{maxHeight: '180px'}}></canvas>
+                </div>
+                
                 <div className="glass-panel" style={{marginBottom: '2rem', padding: '1.5rem'}}>
                   <h4 style={{fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px'}}>Savings Trajectory</h4>
                   <canvas ref={chartRef}></canvas>

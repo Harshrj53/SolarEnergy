@@ -95,14 +95,24 @@ def parse_bill_data(text):
     if tariff_match:
         data["tariff"] = tariff_match.group(1).strip()
 
-    # 8. DATES
-    date_patterns = [r"(\d{2}[-./]\d{2}[-./]\d{4})", r"(\d{2}[-./]\d{2}[-./]\d{2})"]
-    all_dates = []
-    for p in date_patterns:
-        all_dates.extend(re.findall(p, full_text))
+    # 9. CONSUMPTION HISTORY
+    # Search for month patterns like 'जानेवारी - 2025' or 'Jan-25'
+    months_mr = ["जानेवारी", "फेब्रुवारी", "मार्च", "एप्रिल", "मे", "जून", "जुलै", "ऑगस्ट", "सप्टेंबर", "ऑक्टोबर", "नोव्हेंबर", "डिसेंबर"]
+    history = []
     
-    if len(all_dates) >= 2:
-        data["bill_date"] = all_dates[0]
-        data["due_date"] = all_dates[1]
+    # Simple scanner for history table
+    for i, line in enumerate(lines):
+        if any(m in line for m in months_mr) or any(m in line.upper() for m in ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]):
+            # Find the number on this line
+            nums = re.findall(r"\d{1,4}(?!\d)", line)
+            if nums:
+                # The last number is usually the units
+                history.append({"month": line.split()[0], "units": float(nums[-1])})
+    
+    data["history"] = history[:12] # Keep last 12 months
+    if history:
+        data["average_units"] = sum([h["units"] for h in history]) / len(history)
+    else:
+        data["average_units"] = data["units"]
 
     return data
