@@ -81,6 +81,8 @@ export default function Home() {
             plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } } },
             cutout: '70%'
           }
+        });
+        
         // 3. History Chart
         const histCtx = document.getElementById('historyChart')?.getContext('2d');
         if (histCtx) {
