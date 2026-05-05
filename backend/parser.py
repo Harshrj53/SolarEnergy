@@ -1,5 +1,10 @@
 import re
 import random
+import os
+
+# To enable True LLM Parsing (Gemini AI), install google-generativeai 
+# and set GEMINI_API_KEY in your .env file.
+# import google.generativeai as genai
 
 def parse_bill_data(text):
     """
