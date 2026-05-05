@@ -54,10 +54,17 @@ def extract_text(file_bytes, filename):
     if filename.lower().endswith('.pdf'):
         text = extract_text_from_pdf(file_bytes)
         if text == "SCANNED_PDF_DETECTED":
-            # For scanned PDFs, we should ideally convert to image then OCR
-            # But since we have the bytes, let's just return what we have or 
-            # suggest the user that scanned PDFs are slower.
-            return extract_text_from_image(file_bytes)
+            # For scanned PDFs, convert first page to image using pypdfium2
+            import pypdfium2 as pdfium
+            pdf = pdfium.PdfDocument(io.BytesIO(file_bytes))
+            page = pdf[0] # Process first page
+            bitmap = page.render(scale=2) # 2x scale for better OCR
+            pil_image = bitmap.to_pil()
+            
+            # Save PIL image to bytes to reuse extract_text_from_image
+            img_byte_arr = io.BytesIO()
+            pil_image.save(img_byte_arr, format='JPEG')
+            return extract_text_from_image(img_byte_arr.getvalue())
         return text
     else:
         return extract_text_from_image(file_bytes)

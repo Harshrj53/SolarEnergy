@@ -126,11 +126,45 @@ export default function Home() {
     }
   };
 
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      if (file.type === 'application/pdf') return resolve(file);
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1200; // Even smaller for faster upload
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.7); // 70% quality is enough for OCR
+        };
+      };
+    });
+  };
+
   const handleFileUpload = async (e) => {
     if (e.target.files && e.target.files[0]) {
       let f = e.target.files[0];
       setLoading(true);
       setLoadingStage('OPTIMIZING UPLOAD BYTE-STREAM...');
+      
+      if (f.type.startsWith('image/')) {
+        f = await compressImage(f);
+      }
+      
       setFile(f);
       processBill(f);
     }
