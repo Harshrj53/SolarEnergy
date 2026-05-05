@@ -3,32 +3,29 @@ import Head from 'next/head';
 
 export default function Home() {
   const [file, setFile] = useState(null);
-  const [step, setStep] = useState('overview'); // overview, analysis, report
+  const [step, setStep] = useState('portal'); // portal, engine, report
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // Extracted Data
   const [billData, setBillData] = useState({
     consumer_name: '',
     consumer_number: '',
-    billing_period: 'Dec 2025 - Jan 2026',
+    billing_period: 'Q1 2026',
     units: 0,
     sanctioned_load: 1.0,
     tariff: '',
     amount: 0,
   });
-  
-  const [downloadUrl, setDownloadUrl] = useState(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // Derived Solar Calculations
-  const systemSize = Math.max(1, Math.ceil(billData.units / 120));
-  const panels = systemSize * 2.5; // Roughly 400W panels
-  const roofArea = systemSize * 100; // sq ft
-  const estCost = systemSize * 55000; // ₹55k per kW
-  const annualSavings = billData.amount * 11; // Approx 11 months of savings
-  const payback = (estCost / annualSavings).toFixed(1);
+  // Advanced Solar Engine Calculations
+  const systemSize = Math.max(1, Math.ceil(billData.units / 125));
+  const dailyGen = (systemSize * 4.2).toFixed(1); // Avg units per day
+  const carbonOffset = (systemSize * 1.5).toFixed(1); // Tons per year
+  const panels = Math.ceil(systemSize * 2.5);
+  const estCost = systemSize * 58000;
+  const yearlySavings = billData.amount * 10.5;
 
   const processBill = async (selectedFile) => {
     const fileToProcess = selectedFile || file;
@@ -36,7 +33,6 @@ export default function Home() {
 
     setLoading(true);
     setError(null);
-
     const formData = new FormData();
     formData.append('file', fileToProcess);
 
@@ -45,25 +41,23 @@ export default function Home() {
         method: 'POST',
         body: formData,
       });
-
       const result = await response.json();
-
       if (response.ok) {
         setBillData({
-          consumer_name: result.data.consumer_name || 'N/A',
-          consumer_number: result.data.consumer_number || 'N/A',
-          billing_period: 'Dec 2025 - Jan 2026',
+          consumer_name: result.data.consumer_name || 'Anonymous User',
+          consumer_number: result.data.consumer_number || 'EXT-000000',
+          billing_period: 'Jan 2026',
           units: result.data.units || 0,
           sanctioned_load: 1.0,
-          tariff: result.data.tariff || '90/LT I Res 1-Phase',
+          tariff: result.data.tariff || 'Residential',
           amount: result.data.amount || 0,
         });
-        setStep('analysis');
+        setStep('engine');
       } else {
-        setError(result.detail || 'Failed to process bill');
+        setError(result.detail || 'Neural link failed.');
       }
     } catch (err) {
-      setError('Connection failed. Please ensure the backend is running.');
+      setError('Connection to EnergyBae Neural Network lost.');
     } finally {
       setLoading(false);
     }
@@ -77,292 +71,194 @@ export default function Home() {
     }
   };
 
-  const generateExcel = async () => {
+  const generateReport = async () => {
     setLoading(true);
     try {
-      const payload = { data: billData };
       const response = await fetch(`${API_URL}/generate-excel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ data: billData }),
       });
-
       const result = await response.json();
       if (response.ok) {
         window.open(`${API_URL}${result.download_url}`, '_blank');
-      } else {
-        setError('Failed to generate report.');
       }
     } catch (err) {
-      setError('Connection failed.');
+      setError('Report generation failed.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="layout">
+    <div className="app-shell">
       <Head>
-        <title>SolarCloud | Energybae</title>
+        <title>EnergyBae | Next-Gen Solar Intelligence</title>
       </Head>
 
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="logo">
-          <div className="logo-icon">☀️</div>
-          <div className="logo-text">
-            <h2>SolarCloud</h2>
-            <p>by Energybae</p>
+      {/* Futuristic Sidebar */}
+      <aside className="energy-sidebar">
+        <div className="brand">
+          <div className="brand-orb">⚡</div>
+          <div className="brand-name">EnergyBae</div>
+        </div>
+
+        <div className="menu-group">
+          <div className="menu-label">Intelligence</div>
+          <div className={`menu-item ${step === 'portal' ? 'active' : ''}`} onClick={() => setStep('portal')}>
+            <span>💠</span> Data Portal
+          </div>
+          <div className={`menu-item ${step === 'engine' ? 'active' : ''}`} onClick={() => billData.units > 0 && setStep('engine')}>
+            <span>⚛️</span> Solar Engine
+          </div>
+          <div className="menu-item">
+            <span>📊</span> Analytics
           </div>
         </div>
 
-        <nav className="nav-section">
-          <h3>Main Menu</h3>
-          <div className={`nav-item ${step === 'overview' ? 'active' : ''}`} onClick={() => setStep('overview')}>
-            <div className="nav-label">🏠 Overview</div>
-            <div className="nav-badge">1</div>
-          </div>
-          <div className={`nav-item ${step === 'analysis' ? 'active' : ''}`} onClick={() => billData.units > 0 && setStep('analysis')}>
-            <div className="nav-label">📊 Analysis</div>
-            <div className="nav-badge">2</div>
-          </div>
-          <div className="nav-item">
-            <div className="nav-label">📄 Report</div>
-            <div className="nav-badge">3</div>
-          </div>
-        </nav>
+        <div className="menu-group">
+          <div className="menu-label">System</div>
+          <div className="menu-item"><span>⚙️</span> Core Config</div>
+          <div className="menu-item"><span>🛡️</span> Security</div>
+        </div>
 
-        <nav className="nav-section">
-          <h3>Settings</h3>
-          <div className="nav-item">⚙️ Settings</div>
-          <div className="nav-item">❓ Help</div>
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="profile">
-            <div className="profile-img">EB</div>
-            <div className="profile-info">
-              <h4>Energybae</h4>
-              <p>Solar Consultant</p>
-            </div>
-          </div>
+        <div style={{marginTop: 'auto', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '20px'}}>
+          <div style={{fontSize: '0.8rem', color: '#10b981', fontWeight: 700}}>SYSTEM ONLINE</div>
+          <div style={{fontSize: '0.7rem', color: '#94a3b8'}}>Neural Link: Active</div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="main-content">
-        <div className="top-bar">
-          <div className="page-title">
-            <h1>{step === 'overview' ? 'Upload Bill' : 'Bill Analysis'}</h1>
-            <p>{step === 'overview' ? 'AI-powered extraction for MSEDCL, Adani & Tata Power' : 'Review extracted data and ROI projection'}</p>
+      {/* Main Canvas */}
+      <main className="main-canvas">
+        <header className="canvas-header">
+          <div className="greeting">
+            <h1>{step === 'portal' ? 'Quantum Data Entry' : 'Engine Calibration'}</h1>
+            <p>{step === 'portal' ? 'Feed the AI with your energy footprint' : 'Optimize your solar trajectory'}</p>
           </div>
-          <div className="top-actions">
-            <div className="search-icon">🔍</div>
-            <div className="notif-icon">🔔</div>
-            <div className="pro-badge">✨ PRO</div>
+          <div style={{display: 'flex', gap: '1rem'}}>
+             <div className="brand-orb" style={{width: '32px', height: '32px', fontSize: '0.9rem'}}>🔔</div>
+             <div className="brand-orb" style={{width: '32px', height: '32px', fontSize: '0.9rem'}}>👤</div>
           </div>
-        </div>
+        </header>
 
-        {step === 'overview' && (
-          <div className="view-overview">
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-value">2,400+</div>
-                <div className="stat-label">Bills Processed</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">₹12L+</div>
-                <div className="stat-label">Savings Generated</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">98%</div>
-                <div className="stat-label">AI Accuracy</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">&lt;3s</div>
-                <div className="stat-label">Avg. Processing</div>
-              </div>
-            </div>
+        {step === 'portal' && (
+          <div className="upload-portal">
+            <div className="portal-card">
+              <div style={{position: 'relative', zIndex: 1}}>
+                <div className="brand-orb" style={{width: '80px', height: '80px', fontSize: '2rem', margin: '0 auto 2rem'}}>📥</div>
+                <h2>Initialize Data Upload</h2>
+                <p style={{color: '#94a3b8', marginTop: '1rem'}}>Securely process your electricity bills via our Neural Engine</p>
 
-            <div className="upload-container">
-              <div className="upload-icon-wrapper">📤</div>
-              <h2>Upload Electricity Bill</h2>
-              <p style={{color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem'}}>
-                MSEDCL • Adani • Tata Power — any Indian utility bill (PDF or image)
-              </p>
-
-              <div className="upload-dropzone">
-                <input type="file" onChange={handleFileUpload} accept=".pdf,image/*" />
-                <div className="dz-content">
-                  <div style={{fontSize: '2rem', marginBottom: '1rem'}}>📄</div>
-                  <p>Drag & drop your bill here</p>
-                  <small style={{color: '#94a3b8'}}>PDF, PNG, JPG • max 10 MB</small>
+                <div className="drop-zone" onClick={() => document.querySelector('input[type="file"]').click()}>
+                  <input type="file" onChange={handleFileUpload} accept=".pdf,image/*" />
+                  <div style={{fontSize: '3rem', marginBottom: '1.5rem'}}>⚡</div>
+                  <p style={{fontWeight: 600}}>DRAG & DROP BILL</p>
+                  <p style={{fontSize: '0.8rem', color: '#64748b', marginTop: '0.5rem'}}>PDF • PNG • JPG (MAX 25MB)</p>
                 </div>
-              </div>
 
-              {loading ? (
-                <button className="btn-primary" disabled>
-                  <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px'}}>
-                    <span className="loader"></span> Analysing...
-                  </span>
-                </button>
-              ) : (
-                <button className="btn-primary" onClick={() => document.querySelector('input[type="file"]').click()}>
-                  Browse Files
-                </button>
-              )}
-              
-              {error && <p style={{color: '#ef4444', marginTop: '1rem'}}>{error}</p>}
+                {loading ? (
+                  <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem'}}>
+                    <div className="loader-ring"></div>
+                    <p className="analyzing">CALIBRATING NEURAL LINK...</p>
+                  </div>
+                ) : (
+                  <button className="btn-neon" onClick={() => document.querySelector('input[type="file"]').click()}>
+                    BROWSE LOCAL STORAGE
+                  </button>
+                )}
+
+                {error && <p style={{color: '#ef4444', marginTop: '2rem', fontSize: '0.9rem'}}>⚠️ {error}</p>}
+              </div>
             </div>
           </div>
         )}
 
-        {step === 'analysis' && (
-          <div className="view-analysis">
-            <div className="analysis-header-card">
-              <div className="main-metrics">
-                <div style={{fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem'}}>PERFORMANCE MONITORING</div>
-                <h2 style={{fontSize: '1.5rem', marginBottom: '2rem'}}>Bill Analysis</h2>
-                
-                <div className="metrics-grid">
-                  <div className="metric-item">
-                    <h4>Units Consumed</h4>
-                    <div className="value">{billData.units}</div>
-                    <div className="sub">kWh/month</div>
-                  </div>
-                  <div className="metric-item">
-                    <h4>Electricity Rate</h4>
-                    <div className="value">{billData.tariff.match(/\d+/) ? billData.tariff.match(/\d+/)[0] : '7.5'}</div>
-                    <div className="sub">₹/kWh</div>
-                  </div>
-                  <div className="metric-item">
-                    <h4>Sanctioned Load</h4>
-                    <div className="value">{billData.sanctioned_load}</div>
-                    <div className="sub">kW</div>
-                  </div>
-                  <div className="metric-item">
-                    <h4>Monthly Bill</h4>
-                    <div className="value green">₹{billData.amount.toLocaleString()}</div>
-                    <div className="sub">Current avg</div>
-                  </div>
-                  <div className="metric-item">
-                    <h4>Billing Period</h4>
-                    <div className="value" style={{fontSize: '1rem'}}>{billData.billing_period}</div>
-                  </div>
-                  <div className="metric-item">
-                    <h4>Recommended Solar</h4>
-                    <div className="value" style={{color: '#facc15'}}>{systemSize}</div>
-                    <div className="sub">kW system</div>
-                  </div>
-                </div>
+        {step === 'engine' && (
+          <div className="view-engine animate-fade">
+            <div className="metrics-row">
+              <div className="metric-gauge">
+                <span className="gauge-label">ENERGY LOAD</span>
+                <div className="gauge-value">{billData.units} <span style={{fontSize: '0.9rem', color: '#94a3b8'}}>kWh</span></div>
               </div>
-              <div className="card-visual">
-                <div style={{width: '60px', height: '60px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem'}}>
-                  📊
-                </div>
+              <div className="metric-gauge">
+                <span className="gauge-label">SOLAR POTENTIAL</span>
+                <div className="gauge-value" style={{color: '#06b6d4'}}>{systemSize} <span style={{fontSize: '0.9rem', color: '#94a3b8'}}>kWp</span></div>
+              </div>
+              <div className="metric-gauge">
+                <span className="gauge-label">EST. SAVINGS</span>
+                <div className="gauge-value" style={{color: '#f59e0b'}}>₹{(yearlySavings/1000).toFixed(1)}k <span style={{fontSize: '0.9rem', color: '#94a3b8'}}>Yearly</span></div>
               </div>
             </div>
 
-            <div className="dashboard-layout">
-              <div className="left-col">
-                <div className="extracted-fields-card">
-                  <div className="table-header">
-                    <button onClick={() => setStep('overview')} style={{background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer'}}>← Back</button>
-                    <h3 style={{fontSize: '1rem'}}>Extracted Fields</h3>
-                  </div>
-
-                  <div className="fields-list">
-                    <div className="field-row">
-                      <div className="field-label">Consumer Name</div>
-                      <div className="field-input"><input value={billData.consumer_name} onChange={(e) => setBillData({...billData, consumer_name: e.target.value})} /></div>
-                    </div>
-                    <div className="field-row">
-                      <div className="field-label">Consumer Number</div>
-                      <div className="field-input"><input value={billData.consumer_number} onChange={(e) => setBillData({...billData, consumer_number: e.target.value})} /></div>
-                    </div>
-                    <div className="field-row">
-                      <div className="field-label">Billing Period</div>
-                      <div className="field-input"><input value={billData.billing_period} onChange={(e) => setBillData({...billData, billing_period: e.target.value})} /></div>
-                    </div>
-                    <div className="field-row">
-                      <div className="field-label">Units Consumed (kWh)</div>
-                      <div className="field-input"><input type="number" value={billData.units} onChange={(e) => setBillData({...billData, units: parseFloat(e.target.value) || 0})} /></div>
-                    </div>
-                    <div className="field-row">
-                      <div className="field-label">Sanctioned Load (kW)</div>
-                      <div className="field-input"><input type="number" value={billData.sanctioned_load} onChange={(e) => setBillData({...billData, sanctioned_load: parseFloat(e.target.value) || 0})} /></div>
-                    </div>
-                    <div className="field-row">
-                      <div className="field-label">Tariff Category</div>
-                      <div className="field-input"><input value={billData.tariff} onChange={(e) => setBillData({...billData, tariff: e.target.value})} /></div>
-                    </div>
-                    <div className="field-row">
-                      <div className="field-label">Total Bill Amount (₹)</div>
-                      <div className="field-input"><input type="number" value={billData.amount} onChange={(e) => setBillData({...billData, amount: parseFloat(e.target.value) || 0})} /></div>
-                    </div>
-                  </div>
-
-                  <button className="btn-primary" style={{marginTop: '2rem', maxWidth: '100%'}} onClick={generateExcel}>
-                    {loading ? 'Generating...' : 'Generate Solar Report'}
-                  </button>
-                </div>
+            <div className="grid-layout">
+              <div className="glass-panel">
+                <h3 style={{marginBottom: '2rem', fontSize: '1.1rem', color: '#10b981'}}>⚛️ Extracted Data Calibration</h3>
+                <table className="data-table">
+                  <tbody>
+                    <tr>
+                      <td><label>Consumer Name</label></td>
+                      <td><input value={billData.consumer_name} onChange={(e) => setBillData({...billData, consumer_name: e.target.value})} /></td>
+                    </tr>
+                    <tr>
+                      <td><label>Identifier</label></td>
+                      <td><input value={billData.consumer_number} onChange={(e) => setBillData({...billData, consumer_number: e.target.value})} /></td>
+                    </tr>
+                    <tr>
+                      <td><label>Energy Units (kWh)</label></td>
+                      <td><input type="number" value={billData.units} onChange={(e) => setBillData({...billData, units: parseFloat(e.target.value) || 0})} /></td>
+                    </tr>
+                    <tr>
+                      <td><label>Sanctioned Load</label></td>
+                      <td><input type="number" value={billData.sanctioned_load} onChange={(e) => setBillData({...billData, sanctioned_load: parseFloat(e.target.value) || 0})} /></td>
+                    </tr>
+                    <tr>
+                      <td><label>Tariff Class</label></td>
+                      <td><input value={billData.tariff} onChange={(e) => setBillData({...billData, tariff: e.target.value})} /></td>
+                    </tr>
+                    <tr>
+                      <td><label>Bill Amount (₹)</label></td>
+                      <td><input type="number" value={billData.amount} onChange={(e) => setBillData({...billData, amount: parseFloat(e.target.value) || 0})} /></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <button className="btn-neon" style={{marginTop: '2.5rem', width: '100%'}} onClick={generateReport}>
+                  {loading ? 'GENERATING BYTES...' : 'GENERATE SOLAR BLUEPRINT'}
+                </button>
               </div>
 
-              <div className="right-col">
-                <div className="roi-card">
-                  <div className="roi-title">ROI Comparison</div>
-                  <div className="roi-subtitle">Cumulative cost • Solar vs. No Solar • 3% annual escalation</div>
-                  
-                  <div className="chart-placeholder">
-                    <div className="chart-bar-group">
-                      <div className="bar no-solar" style={{height: '20%'}}></div>
-                      <div className="bar with-solar" style={{height: '5%'}}></div>
-                    </div>
-                    <div className="chart-bar-group">
-                      <div className="bar no-solar" style={{height: '50%'}}></div>
-                      <div className="bar with-solar" style={{height: '10%'}}></div>
-                    </div>
-                    <div className="chart-bar-group">
-                      <div className="bar no-solar" style={{height: '90%'}}></div>
-                      <div className="bar with-solar" style={{height: '15%'}}></div>
-                    </div>
-                  </div>
-                  <div className="chart-labels">
-                    <span>5 Years</span>
-                    <span>10 Years</span>
-                    <span>20 Years</span>
-                  </div>
-                  <div className="chart-legend">
-                    <div className="legend-item"><span className="dot" style={{background: '#facc15'}}></span> Without Solar</div>
-                    <div className="legend-item"><span className="dot" style={{background: '#4ade80'}}></span> With Solar</div>
+              <div className="right-stack">
+                <div className="glass-panel" style={{marginBottom: '2rem', padding: '1.5rem'}}>
+                  <h4 style={{fontSize: '0.9rem', marginBottom: '1.5rem'}}>SAVINGS TRAJECTORY</h4>
+                  <div className="chart-container">
+                    <div className="chart-bar" style={{height: '30%'}} data-label="Current"></div>
+                    <div className="chart-bar" style={{height: '65%'}} data-label="Year 5"></div>
+                    <div className="chart-bar" style={{height: '95%'}} data-label="Year 10"></div>
                   </div>
                 </div>
 
-                <div className="points-card">
-                  <div className="roi-title" style={{marginBottom: '1rem'}}>Solar System Points</div>
-                  <div className="point-item">
-                    <div className="point-label">🟡 System Size</div>
-                    <div className="point-value">{systemSize} kW</div>
-                  </div>
-                  <div className="point-item">
-                    <div className="point-label">🟢 Solar Panels (400W)</div>
-                    <div className="point-value">{panels}</div>
-                  </div>
-                  <div className="point-item">
-                    <div className="point-label">🔵 Roof Area Required</div>
-                    <div className="point-value">{roofArea} sq.ft</div>
-                  </div>
-                  <div className="point-item">
-                    <div className="point-label">🟢 Est. System Cost</div>
-                    <div className="point-value">₹{(estCost/100000).toFixed(1)}L</div>
-                  </div>
-                  <div className="point-item">
-                    <div className="point-label">🟡 Annual Savings (Yr 1)</div>
-                    <div className="point-value">₹{(annualSavings/1000).toFixed(0)}K</div>
-                  </div>
-                  <div className="point-item">
-                    <div className="point-label">🔵 Payback Period</div>
-                    <div className="point-value">{payback} yrs</div>
+                <div className="glass-panel" style={{padding: '1.5rem'}}>
+                  <h4 style={{fontSize: '0.9rem', marginBottom: '1.5rem'}}>SYSTEM BLUEPRINT</h4>
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem'}}>
+                      <span style={{color: '#94a3b8'}}>Panel Count (400W)</span>
+                      <span style={{fontWeight: 700}}>{panels} Units</span>
+                    </div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem'}}>
+                      <span style={{color: '#94a3b8'}}>Daily Generation</span>
+                      <span style={{fontWeight: 700, color: '#10b981'}}>{dailyGen} kWh</span>
+                    </div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem'}}>
+                      <span style={{color: '#94a3b8'}}>Carbon Offset</span>
+                      <span style={{fontWeight: 700, color: '#06b6d4'}}>{carbonOffset} Tons</span>
+                    </div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem'}}>
+                      <span style={{color: '#94a3b8'}}>Est. Investment</span>
+                      <span style={{fontWeight: 700}}>₹{(estCost/100000).toFixed(1)}L</span>
+                    </div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem'}}>
+                      <span style={{color: '#94a3b8'}}>Payback Matrix</span>
+                      <span style={{fontWeight: 700, color: '#f59e0b'}}>{payback} Years</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -370,6 +266,10 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      <style jsx>{`
+        .animate-fade { animation: slideUp 0.5s ease-out; }
+      `}</style>
     </div>
   );
 }
