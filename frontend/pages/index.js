@@ -105,6 +105,8 @@ export default function Home() {
         body: formData,
       });
       const result = await response.json();
+      console.log("ENERGYBAE DEBUG:", result);
+      
       if (response.ok) {
         setBillData({
           consumer_name: result.data.consumer_name || 'Anonymous User',
