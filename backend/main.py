@@ -52,9 +52,6 @@ async def process_bill(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     
     try:
-        # Artificial delay for UX realism (Processing AI...)
-        await asyncio.sleep(1.5)
-
         with open(input_path, "rb") as f:
             file_bytes = f.read()
         

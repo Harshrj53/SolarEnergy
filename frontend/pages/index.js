@@ -26,6 +26,7 @@ export default function Home() {
   const panels = Math.ceil(systemSize * 2.5);
   const estCost = systemSize * 58000;
   const yearlySavings = billData.amount * 10.5;
+  const payback = yearlySavings > 0 ? (estCost / yearlySavings).toFixed(1) : '0.0';
 
   const processBill = async (selectedFile) => {
     const fileToProcess = selectedFile || file;

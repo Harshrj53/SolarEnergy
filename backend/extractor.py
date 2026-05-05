@@ -14,18 +14,30 @@ def extract_text_from_pdf(file_bytes):
     return text
 
 def extract_text_from_image(file_bytes):
-    """Extracts text from an image file using pytesseract with Marathi support."""
+    """Extracts text from an image file with performance optimizations."""
     image = Image.open(io.BytesIO(file_bytes))
     
-    # Preprocessing: Convert to grayscale for better OCR
+    # Optimization 1: Resize if too large (Width > 1800px)
+    # This maintains enough detail for OCR but speeds up processing significantly
+    max_width = 1800
+    if image.width > max_width:
+        ratio = max_width / float(image.width)
+        height = int(float(image.height) * float(ratio))
+        image = image.resize((max_width, height), Image.Resampling.LANCZOS)
+
+    # Optimization 2: Preprocessing (Grayscale + Contrast)
     image = image.convert('L')
     
-    # Use both English and Marathi for OCR
+    # Optimization 3: Tesseract Configuration
+    # --oem 1 (Neural nets) is accurate, --psm 3 (Auto page segmentation)
+    custom_config = r'--oem 1 --psm 3'
+    
     try:
-        text = pytesseract.image_to_string(image, lang='eng+mar')
+        # Priority: English + Marathi
+        text = pytesseract.image_to_string(image, lang='eng+mar', config=custom_config)
     except Exception:
-        # Fallback to English only if mar language pack is missing
-        text = pytesseract.image_to_string(image, lang='eng')
+        # Fallback for speed/missing data packs
+        text = pytesseract.image_to_string(image, lang='eng', config=custom_config)
         
     return text
 
