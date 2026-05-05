@@ -277,15 +277,24 @@ export default function Home() {
             <div className="metrics-row">
               <div className="metric-gauge">
                 <span className="gauge-label">ENERGY LOAD</span>
-                <div className="gauge-value">{billData.units} <span style={{fontSize: '0.9rem', color: '#94a3b8'}}>kWh</span></div>
+                <div className="gauge-value">
+                  {billData.units > 10000 ? '10k+' : billData.units} 
+                  <span style={{fontSize: '0.9rem', color: '#94a3b8'}}> kWh</span>
+                </div>
               </div>
               <div className="metric-gauge">
                 <span className="gauge-label">SOLAR POTENTIAL</span>
-                <div className="gauge-value" style={{color: '#06b6d4'}}>{systemSize} <span style={{fontSize: '0.9rem', color: '#94a3b8'}}>kWp</span></div>
+                <div className="gauge-value" style={{color: '#06b6d4'}}>
+                  {systemSize > 500 ? '500+' : systemSize} 
+                  <span style={{fontSize: '0.9rem', color: '#94a3b8'}}> kWp</span>
+                </div>
               </div>
               <div className="metric-gauge">
                 <span className="gauge-label">EST. SAVINGS</span>
-                <div className="gauge-value" style={{color: '#f59e0b'}}>₹{(yearlySavings/1000).toFixed(1)}k <span style={{fontSize: '0.9rem', color: '#94a3b8'}}>Yearly</span></div>
+                <div className="gauge-value" style={{color: '#f59e0b'}}>
+                  ₹{yearlySavings > 10000000 ? '99L+' : (yearlySavings/1000).toFixed(1)}k 
+                  <span style={{fontSize: '0.9rem', color: '#94a3b8'}}> Yearly</span>
+                </div>
               </div>
             </div>
 
