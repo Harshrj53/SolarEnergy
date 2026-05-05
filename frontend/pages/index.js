@@ -109,11 +109,12 @@ export default function Home() {
         setBillData({
           consumer_name: result.data.consumer_name || 'Anonymous User',
           consumer_number: result.data.consumer_number || 'EXT-000000',
-          billing_period: 'Jan 2026',
+          billing_period: result.data.bill_date || 'Jan 2026',
           units: result.data.units || 0,
-          sanctioned_load: result.data.sanctioned_load || 1.0,
+          sanctioned_load: result.data.sanctioned_load || 0,
           tariff: result.data.tariff || 'Residential',
           amount: result.data.amount || 0,
+          due_date: result.data.due_date || 'N/A'
         });
         setStep('engine');
       } else {
@@ -321,6 +322,14 @@ export default function Home() {
                     <tr>
                       <td><label>Sanctioned Load</label></td>
                       <td><input type="number" value={billData.sanctioned_load} onChange={(e) => setBillData({...billData, sanctioned_load: parseFloat(e.target.value) || 0})} /></td>
+                    </tr>
+                    <tr>
+                      <td><label>Billing Date</label></td>
+                      <td><input value={billData.billing_period} onChange={(e) => setBillData({...billData, billing_period: e.target.value})} /></td>
+                    </tr>
+                    <tr>
+                      <td><label>Due Date</label></td>
+                      <td><input value={billData.due_date} onChange={(e) => setBillData({...billData, due_date: e.target.value})} /></td>
                     </tr>
                     <tr>
                       <td><label>Tariff Class</label></td>

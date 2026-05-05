@@ -22,6 +22,8 @@ def parse_bill_data(text):
         "units": 0,
         "amount": 0,
         "sanctioned_load": 0,
+        "bill_date": "N/A",
+        "due_date": "N/A",
         "tariff": "92/LT I Res 3-Phase",
         "confidence": {"consumer_name": 0.5, "units": 0.5, "amount": 0.5}
     }
@@ -76,6 +78,15 @@ def parse_bill_data(text):
     load_match = re.search(r"(?:मंजूरी भार|Connected Load|Sanctioned Load)[^\d]*([\d.]+)", full_process_text, re.IGNORECASE)
     if load_match:
         data["sanctioned_load"] = float(load_match.group(1))
+
+    # 8. DATES
+    date_match = re.search(r"(?:देयक दिनांक|Bill Date)[^\d]*([\d-]{10})", full_process_text, re.IGNORECASE)
+    if date_match:
+        data["bill_date"] = date_match.group(1)
+        
+    due_match = re.search(r"(?:देय दिनांक|Due Date)[^\d]*([\d-]{10})", full_process_text, re.IGNORECASE)
+    if due_match:
+        data["due_date"] = due_match.group(1)
 
     return data
 
