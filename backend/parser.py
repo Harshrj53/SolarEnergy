@@ -66,24 +66,35 @@ def parse_bill_data(text):
             data["units"] = float(mar_units.group(1))
 
     # 5. BILL AMOUNT (₹)
-    # The amount is 59140.00
-    # Avoid the huge concatenated number by looking specifically for 'Rs.' or 'रक्कम'
-    amount_match = re.search(r"(?:Rs\.|रक्कम|Payable|Total)[^\d]*([\d,]+\.\d{2})", full_text, re.IGNORECASE)
-    if amount_match:
-        data["amount"] = float(amount_match.group(1).replace(',', ''))
-        data["confidence"]["amount"] = 0.99
-    else:
-        # Fallback: Look for large numbers that look like MSEDCL totals
-        all_floats = re.findall(r"([\d,]+\.\d{2})", full_text)
-        if all_floats:
-            nums = [float(x.replace(',', '')) for x in all_floats]
-            # MSEDCL amounts are usually > 100
-            valid_nums = [n for n in nums if n > 100 and n < 1000000]
-            if valid_nums:
-                data["amount"] = max(valid_nums)
+    # The amount in the bill is 59140.00
+    # We look for decimals with exactly two digits after the dot
+    amount_candidates = re.findall(r"(?:Rs\.|रक्कम|Payable|Total)[^\d]*([\d,]+\.\d{2})", full_text, re.IGNORECASE)
+    
+    if amount_candidates:
+        # Take the last one before the RTGS section (usually the final total)
+        try:
+            val = float(amount_candidates[-1].replace(',', ''))
+            if 100 < val < 1000000:
+                data["amount"] = val
+                data["confidence"]["amount"] = 0.99
+        except:
+            pass
+
+    if data["amount"] == 0:
+        # Fallback: find any valid currency-like number
+        all_decimals = re.findall(r"([\d,]+\.\d{2})", full_text)
+        for d in reversed(all_decimals):
+            try:
+                val = float(d.replace(',', ''))
+                if 100 < val < 1000000:
+                    data["amount"] = val
+                    data["confidence"]["amount"] = 0.85
+                    break
+            except:
+                continue
 
     # 6. TARIFF
-    tariff_match = re.search(r"(\d{2}/LT\s*[I\d\s\w-]+Phase)", text, re.IGNORECASE)
+    tariff_match = re.search(r"(\d{2}/LT\s*[I\d\s\w-]+Phase)", full_text, re.IGNORECASE)
     if tariff_match:
         data["tariff"] = tariff_match.group(1).strip()
 
