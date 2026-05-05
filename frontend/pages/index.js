@@ -111,7 +111,7 @@ export default function Home() {
           consumer_number: result.data.consumer_number || 'EXT-000000',
           billing_period: 'Jan 2026',
           units: result.data.units || 0,
-          sanctioned_load: 1.0,
+          sanctioned_load: result.data.sanctioned_load || 1.0,
           tariff: result.data.tariff || 'Residential',
           amount: result.data.amount || 0,
         });
