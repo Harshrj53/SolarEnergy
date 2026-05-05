@@ -16,22 +16,20 @@ if GEMINI_API_KEY:
 def parse_with_gemini(text):
     """Parses bill text using Gemini AI for 100% accuracy."""
     prompt = f"""
-    Act as a professional electricity bill analyzer for EnergyBae. 
-    Extract the following data from this MSEDCL (MahaVitaran) bill text in JSON format:
-    - consumer_name: Full name in English
-    - consumer_number: 12-digit account number
-    - units: Total units consumed for the current month
-    - amount: Total bill amount (Payable)
-    - sanctioned_load: Connected load in kW
-    - bill_date: Date of the bill
-    - due_date: Payment due date
-    - tariff: Tariff class (e.g. Residential)
-    - history: An array of last 12 months with {{"month": "Name", "units": value}}
+    Extract MSEDCL bill data into JSON:
+    {{
+      "consumer_name": "string",
+      "consumer_number": "string",
+      "units": number,
+      "amount": number,
+      "sanctioned_load": number,
+      "bill_date": "string",
+      "due_date": "string",
+      "tariff": "string",
+      "history": [{{"month": "string", "units": number}}]
+    }}
     
-    Return ONLY valid JSON.
-    
-    BILL TEXT:
-    {text}
+    TEXT: {text}
     """
     try:
         response = model.generate_content(prompt)

@@ -22,24 +22,28 @@ def extract_text_from_pdf(file_bytes):
     
     return text
 def extract_text_from_image(image_bytes):
-    """Extracts text from an image with enhancement for low-quality photos."""
+    """Extracts text from an image with high-speed enhancement."""
     image = Image.open(io.BytesIO(image_bytes))
     
-    # Pre-processing for better OCR
+    # 1. High-Speed Optimization: Cap resolution at 1500px
+    max_width = 1500
+    if image.width > max_width:
+        ratio = max_width / float(image.width)
+        height = int(float(image.height) * float(ratio))
+        image = image.resize((max_width, height), Image.Resampling.LANCZOS)
+    
+    # 2. Fast Pre-processing
     image = image.convert('L') # Grayscale
     
     from PIL import ImageEnhance, ImageFilter
-    # Increase contrast
     enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2.0)
+    image = enhancer.enhance(1.5) # Slight contrast boost
     
-    # Sharpening
-    image = image.filter(ImageFilter.SHARPEN)
-    
-    # Scaling up if small
-    if image.width < 1500:
-        image = image.resize((image.width * 2, image.height * 2), Image.Resampling.LANCZOS)
+    # Skip sharpening for speed unless low res
+    if image.width < 1000:
+        image = image.filter(ImageFilter.SHARPEN)
 
+    # 3. Fast Tesseract config (PSM 1 or 3 is usually best for speed/accuracy balance)
     custom_config = r'--oem 3 --psm 3'
     try:
         text = pytesseract.image_to_string(image, lang='eng+mar', config=custom_config)
